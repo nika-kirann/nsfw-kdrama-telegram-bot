@@ -25,15 +25,31 @@ class Store:
         for s in self.d["series"].values():
             for e in s["episodes"]:
                 if "links" not in e:
-                    e.pop("text", None); e["links"] = {}; e.setdefault("title", f"Episode {e['n']}")
+                    e.pop("text", None); e["links"] = []; e.setdefault("title", f"Episode {e['n']}")
+                elif isinstance(e["links"], dict):  # {label: url} -> [{q,url,kind}]
+                    e["links"] = [{"q": ("HD" if k == "Watch" else k), "url": u, "kind": "part"} for k, u in e["links"].items()]
 
     def set_episode_links(self, sid, n, links, title=None):
         e = self.get(sid)["episodes"][n - 1]
-        e["links"] = dict(links)
+        e["links"] = [dict(l) for l in links]
         if title:
             e["title"] = title
         e["added"] = time.time(); self.get(sid)["updated"] = time.time()
         self.save()
+
+    def apply_links(self, sid, eps, total=None):
+        """eps = {n: [(q, url, kind)]} from parse_quality_links. Creates episodes up to max(n, total);
+        replaces links of each episode given. Returns sorted episode numbers touched."""
+        s = self.get(sid)
+        top = max([*eps, total or 0, len(s["episodes"])])
+        while len(s["episodes"]) < top:
+            self.add_episode(sid, [], save=False)
+        for n, ls in eps.items():
+            e = s["episodes"][n - 1]
+            e["links"] = [{"q": q, "url": u, "kind": k} for q, u, k in ls]; e["added"] = time.time()
+        s["updated"] = time.time()
+        self.save()
+        return sorted(eps)
 
     def save(self, flush=True):
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -68,11 +84,11 @@ class Store:
         return hits[0] if len(hits) == 1 else None
 
     def add_episode(self, sid, links, title=None, save=True):
-        """Episode = title + watch links {label: url}, e.g. {"Watch": url} or {"480p": u1, "720p": u2}.
+        """Episode = title + watch links [{"q": "720p", "url": ..., "kind": "part"|"mirror"}].
         Empty links = stub (shown as 'link coming soon')."""
         s = self.get(sid)
         n = len(s["episodes"]) + 1
-        s["episodes"].append({"n": n, "title": title or f"Episode {n}", "links": dict(links), "added": time.time()})
+        s["episodes"].append({"n": n, "title": title or f"Episode {n}", "links": [dict(l) for l in links], "added": time.time()})
         s["updated"] = time.time()
         if save:
             self.save()

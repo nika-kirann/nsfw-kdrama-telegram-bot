@@ -8,9 +8,10 @@ from telegram.constants import ParseMode
 from telegram.ext import CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 from ..channel import heat, series_card
+from .admin import WIZ_STAGES, wizard_text, wizard_cb
 from ..content import MODES, random_from
 from ..content.characters import CHARACTERS
-from .common import H, arg_text, deps, ep_buttons
+from .common import H, arg_text, deps, ep_buttons, qualities
 
 HTML = ParseMode.HTML
 PER = 8
@@ -57,7 +58,7 @@ def episodes_kb(s, page=0):
 def episode_view(s, n):
     e = s["episodes"][n - 1]
     if e.get("links"):
-        body = "▶️ Tap a button below to watch" + (" (pick a quality)." if len(e["links"]) > 1 else ".")
+        body = "▶️ Tap a button below to watch" + (" (pick a quality)." if len(qualities(e)) > 1 else ".")
     else:
         body = "⏳ Watch link coming soon — check back or join the channel for the drop."
     text = f"🔞 <b>{H(s['title'])}</b> — EP {n}/{len(s['episodes'])}\n🎬 {H(e.get('title') or f'Episode {n}')}\n\n{body}"
@@ -210,6 +211,8 @@ async def on_cb(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     kind = parts[0]
     if kind == "noop":
         return await q.answer()
+    if kind == "wz":
+        return await wizard_cb(update, ctx)
     if kind == "cancel":
         clear_state(ctx)
         await q.answer("Cancelled")
@@ -267,6 +270,8 @@ async def on_cb(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 async def on_text(update: Update, ctx):
+    if ctx.user_data.get("wizard") and ctx.user_data["wizard"][0] in WIZ_STAGES:
+        return await wizard_text(update, ctx)
     if not ctx.user_data.get("age_ok"):
         return await gate(update, ctx)
     store, cfg = deps(ctx)

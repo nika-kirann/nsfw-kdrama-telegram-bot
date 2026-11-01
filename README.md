@@ -20,23 +20,28 @@ python -m bot
 ## Commands
 **Viewers:** /start (18+ gate, deep links `?start=s_<id>` / `e_<id>_<n>` / `request` / `browse`), /browse (Latest, Hottest, Ongoing, Completed, Tropes, Search, Spicy Scene, Dirty Talk, Character RP, Request), /latest, /search, /scene, /episode, /dirty, /rp, /stop, /request. Any DM text = search.
 
-## Episodes = watch links
-Each episode is a title + one or more watch URLs (`{"n", "title", "links": {"Watch"|"480p"|"720p"|"1080p": url}}`). Viewers tap an EP button and get ▶️ URL buttons (one per quality). Episodes without links show ⏳ "link coming soon". The 8 seeded series ship with stub episodes — fill them in:
+## Episodes = watch links (heaven-bot style wizard)
+Each episode = title + watch links `[{"q": "720p", "url": ..., "kind": "part"|"mirror"}]`. Viewers tap an EP and get ▶️ buttons per quality (Part 1/2, Mirror 2…). Episodes without links show ⏳ "link coming soon". The 8 seeded series ship with stub episodes.
 
-```
-/addep 3 https://example.com/watch/ep1          # fills the first stub (or appends) with a ▶️ Watch button
-/addep 3
-Episode 2 – The Storm                             # optional title line
-480p https://example.com/ep2-480.mp4
-720p https://example.com/ep2-720.mp4
-1080p https://example.com/ep2-1080.mp4
-/addep 3 https://example.com/ep{ep}.mp4 1 8       # bulk: EP 1–8 from a pattern (prefix "720p " for a quality)
-/setep 3 2 720p https://new-link                  # replace EP 2's links
-/eps 3                                            # list link status
-```
-Each add/set updates the channel card and posts a "▶️ Watch EP n" drop. Old text-episode data is auto-migrated to stubs.
+**Wizard:** `/add` → title → tropes → heat (🌶 buttons) → synopsis → status → 🔢 *Total episodes* → 🔗 *Episode links by quality* (starting at EP 1). `/add Title | Tropes | heat | synopsis` and `/addep <id>` jump straight to total → links (`/addep` starts at the first episode without links). `/skip` leaves a step empty; `/cancel` or ✖️ Cancel aborts.
 
-**Admins:** /add Title | Tropes | heat | synopsis · /addep <id> <watch link> · /setep <id> <ep> <links> · /eps <id> (see *Episodes = watch links* below) · /complete · /edit · /delete · /list · /stats · /repost <id|all> · /post [text] · /schedule YYYY-MM-DD HH:MM text · /schedules · /digest · /admin
+Link formats (mix freely, one episode per line inside a quality; each quality counts its own episodes):
+```
+720p: https://a/ep1
+1080p: https://b/ep1
+
+720p: https://a/ep2
+1080p: https://b/ep2
+720p: https://b/ep1-part1, https://b/ep1-part2     ← parts
+1080p: https://c/ep1 | https://mirror/ep1          ← mirrors
+1080p: https://ex.com/{ep}.mkv 1 16                ← pattern (start end)
+720p                                               ← block: then one URL per line = EP 1, 2, 3…
+https://plain/ep1                                  ← no quality → HD
+EP 9                                               ← following links start at EP 9
+```
+One-shot: `/addep <id>` + links in the same message · `/setep <id> <ep>` + links (replace one episode) · `/eps <id>` (link status). Saving updates the channel card and posts a "▶️ Watch EP n" drop. Older data is auto-migrated.
+
+**Admins:** /add (wizard) · /addep <id> (episode wizard or one-shot) · /setep · /eps · /skip (see *Episodes* above) · /complete · /edit · /delete · /list · /stats · /repost <id|all> · /post [text] · /schedule YYYY-MM-DD HH:MM text · /schedules · /digest · /admin
 
 Channel cards carry "▶️ Watch episodes" / "💌 Request" / "🔎 Browse" buttons that open the bot privately. Daily digest at DAILY_DIGEST_TIME (TIMEZONE). Data lives in `data/series.json` (seeded with 8 series whose episodes are link stubs).
 

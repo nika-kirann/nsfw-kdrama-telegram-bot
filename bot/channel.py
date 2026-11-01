@@ -57,11 +57,12 @@ async def post_card(bot, cfg, store, s):
     return msg.message_id
 
 
-async def announce_episode(bot, cfg, s, n):
+async def announce_episode(bot, cfg, s, n, upto=None):
     me = await bot.get_me()
     e = s["episodes"][n - 1]
-    q = " · ".join(k for k in e.get("links", {}) if k != "Watch")
+    from .handlers.common import qualities
+    q = " · ".join(qualities(e))
     await post_to_channel(bot, cfg.channel_id,
-                          f"🆕 <b>{H(s['title'])}</b> — EP {n} is out {heat(s['heat'])}\n🎬 {H(e.get('title') or '')}"
+                          f"🆕 <b>{H(s['title'])}</b> — EP {n if not upto or upto == n else f'{n}–{upto}'} is out {heat(s['heat'])}\n🎬 {H(e.get('title') or '')}"
                           + (f"\n🎞 Quality: <code>{H(q)}</code>" if q else "") + "\n\n🔞 18+ only · tap to watch 👇",
                           M([[B(f"▶️ Watch EP {n}", url=f"https://t.me/{me.username}?start=e_{s['id']}_{n}")]]))
