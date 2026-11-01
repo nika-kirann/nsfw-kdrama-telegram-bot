@@ -17,6 +17,22 @@ class Store:
             self.d = {"next_id": 1, "series": {}, "requests": [], "schedules": [], "channel_posts": {}}
             for s in SEED:
                 self.add_series(**s)
+        self._migrate()
+        self.save()
+
+    def _migrate(self):
+        """Old format had prose 'text' episodes -> convert to watch-link stubs."""
+        for s in self.d["series"].values():
+            for e in s["episodes"]:
+                if "links" not in e:
+                    e.pop("text", None); e["links"] = {}; e.setdefault("title", f"Episode {e['n']}")
+
+    def set_episode_links(self, sid, n, links, title=None):
+        e = self.get(sid)["episodes"][n - 1]
+        e["links"] = dict(links)
+        if title:
+            e["title"] = title
+        e["added"] = time.time(); self.get(sid)["updated"] = time.time()
         self.save()
 
     def save(self, flush=True):
@@ -33,8 +49,8 @@ class Store:
         self.d["series"][sid] = {"id": int(sid), "title": title, "synopsis": synopsis, "tags": list(tags),
                                  "status": status, "heat": heat, "poster": poster, "created": time.time(),
                                  "updated": time.time(), "episodes": []}
-        for ep in episodes:
-            self.add_episode(int(sid), ep, save=False)
+        for _ in range(episodes if isinstance(episodes, int) else len(episodes)):
+            self.add_episode(int(sid), {}, save=False)
         self.save()
         return self.get(int(sid))
 
@@ -51,9 +67,12 @@ class Store:
         hits = [s for s in self.d["series"].values() if ref.lower() in s["title"].lower()]
         return hits[0] if len(hits) == 1 else None
 
-    def add_episode(self, sid, text, save=True):
+    def add_episode(self, sid, links, title=None, save=True):
+        """Episode = title + watch links {label: url}, e.g. {"Watch": url} or {"480p": u1, "720p": u2}.
+        Empty links = stub (shown as 'link coming soon')."""
         s = self.get(sid)
-        s["episodes"].append({"n": len(s["episodes"]) + 1, "text": text, "added": time.time()})
+        n = len(s["episodes"]) + 1
+        s["episodes"].append({"n": n, "title": title or f"Episode {n}", "links": dict(links), "added": time.time()})
         s["updated"] = time.time()
         if save:
             self.save()

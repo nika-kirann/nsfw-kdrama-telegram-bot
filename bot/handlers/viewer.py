@@ -10,7 +10,7 @@ from telegram.ext import CallbackQueryHandler, CommandHandler, ContextTypes, Mes
 from ..channel import heat, series_card
 from ..content import MODES, random_from
 from ..content.characters import CHARACTERS
-from .common import H, arg_text, deps
+from .common import H, arg_text, deps, ep_buttons
 
 HTML = ParseMode.HTML
 PER = 8
@@ -42,7 +42,7 @@ def episodes_kb(s, page=0):
     eps = s["episodes"]; pages = max(1, ceil(len(eps) / 10)); page = min(page, pages - 1)
     rows, row = [], []
     for e in eps[page * 10:(page + 1) * 10]:
-        row.append(B(f"EP {e['n']}", callback_data=f"ep:{s['id']}:{e['n']}"))
+        row.append(B(f"{'▶️' if e.get('links') else '⏳'} EP {e['n']}", callback_data=f"ep:{s['id']}:{e['n']}"))
         if len(row) == 5:
             rows.append(row); row = []
     if row:
@@ -56,10 +56,14 @@ def episodes_kb(s, page=0):
 
 def episode_view(s, n):
     e = s["episodes"][n - 1]
-    text = f"🔞 <b>{H(s['title'])}</b> — EP {n}/{len(s['episodes'])}\n\n{e['text']}"
+    if e.get("links"):
+        body = "▶️ Tap a button below to watch" + (" (pick a quality)." if len(e["links"]) > 1 else ".")
+    else:
+        body = "⏳ Watch link coming soon — check back or join the channel for the drop."
+    text = f"🔞 <b>{H(s['title'])}</b> — EP {n}/{len(s['episodes'])}\n🎬 {H(e.get('title') or f'Episode {n}')}\n\n{body}"
     nav = ([B("⏮ Prev", callback_data=f"ep:{s['id']}:{n-1}")] if n > 1 else []) + \
           ([B("Next ⏭", callback_data=f"ep:{s['id']}:{n+1}")] if n < len(s["episodes"]) else [])
-    return text, M(([nav] if nav else []) + [[B("📜 Episodes", callback_data=f"eps:{s['id']}:0"), B("🏠 Menu", callback_data="br:menu:0")]])
+    return text, M(ep_buttons(e) + ([nav] if nav else []) + [[B("📜 Episodes", callback_data=f"eps:{s['id']}:0"), B("🏠 Menu", callback_data="br:menu:0")]])
 
 
 CANCEL_KB = M([[B("✖️ Cancel", callback_data="cancel")]])

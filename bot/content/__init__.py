@@ -4,7 +4,7 @@ from . import scenes, characters, episodes, dirty_talk
 
 MODES = {
     "scene": ("🔥 Spicy Scene", scenes.SCENES),
-    "episode": ("🎬 Episode Drop", episodes.EPISODES),
+    "episode": ("🎬 Spicy Teaser", episodes.EPISODES),
     "dirty": ("💋 Dirty Talk Drama", dirty_talk.LINES),
 }
 

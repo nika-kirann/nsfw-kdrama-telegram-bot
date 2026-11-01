@@ -2,6 +2,7 @@
 /schedule /schedules /digest /admin."""
 import datetime as dt
 import random
+import re
 
 from telegram.constants import ParseMode
 from telegram import InlineKeyboardButton as B, InlineKeyboardMarkup as M
@@ -12,7 +13,7 @@ from ..config import ROOT
 from ..posters import make_poster
 from ..channel import announce_episode, post_card, post_to_channel
 from ..content import random_from
-from .common import H, admin_only, arg_text, deps
+from .common import H, admin_only, arg_text, deps, parse_links
 
 HTML = ParseMode.HTML
 
@@ -37,7 +38,7 @@ async def add(update, ctx):
     if st and st.backend == "telegram":
         pth = await st.upload_poster(open(pth, "rb").read())
     store.update(s["id"], poster=pth)
-    msg = f"✅ Added #{s['id']} {H(s['title'])}. Add episodes with /addep {s['id']} &lt;text&gt;"
+    msg = f"✅ Added #{s['id']} {H(s['title'])}. Add episodes with /addep {s['id']} &lt;watch link&gt;"
     if cfg.channel_id:
         try:
             await post_card(ctx.bot, cfg, store, s); msg += "\n📤 Card posted to channel."
@@ -46,23 +47,95 @@ async def add(update, ctx):
     await update.message.reply_text(msg, parse_mode=HTML)
 
 
+ADDEP_HELP = ("Usage (watch links, not text):\n"
+    "/addep &lt;id&gt; https://link — one episode, single Watch button\n"
+    "/addep &lt;id&gt;\nEpisode title (optional)\n480p https://…\n720p https://…\n1080p https://…\n"
+    "/addep &lt;id&gt; https://site/ep{ep}.mp4 1 8 — bulk: EP 1–8 from a {ep} pattern\n"
+    "/setep &lt;id&gt; &lt;ep&gt; + links — replace links of an existing (stub) episode")
+
+
+async def _announce(ctx, cfg, store, s, n):
+    if not cfg.channel_id:
+        return ""
+    try:
+        await post_card(ctx.bot, cfg, store, s); await announce_episode(ctx.bot, cfg, s, n)
+        return " Card updated + drop announced."
+    except Exception as e:
+        return f" ⚠️ Channel: {H(str(e))}"
+
+
 @admin_only
 async def addep(update, ctx):
-    """/addep <id|title> then episode text on the next lines."""
+    """/addep <id|title> <links...> — episode = title + watch link(s)."""
     store, cfg = deps(ctx)
-    first, _, body = arg_text(update).partition("\n")
-    s = store.find(first)
-    if not s or not body.strip():
-        return await update.message.reply_text("Usage:\n/addep <id or title>\n<episode text on following lines>")
-    n = store.add_episode(s["id"], H(body.strip()))
-    msg = f"🆕 EP {n} added to {H(s['title'])}."
-    if cfg.channel_id:
-        try:
-            await post_card(ctx.bot, cfg, store, s); await announce_episode(ctx.bot, cfg, s, n)
-            msg += " Card updated + drop announced."
-        except Exception as e:
-            msg += f" ⚠️ Channel: {H(str(e))}"
+    raw = arg_text(update)
+    first, _, rest = raw.partition("\n")
+    ref, _, inline = first.strip().partition(" ")
+    s = store.find(ref)
+    if not s and "http" not in first:  # title with spaces on the first line
+        s, inline = store.find(first), ""
+    if not s:
+        return await update.message.reply_text(ADDEP_HELP, parse_mode=HTML)
+    bulk = re.fullmatch(r"(?:(\S+?)[: ]\s*)?(https?://\S*\{ep\}\S*)\s+(\d+)(?:\s+(\d+))?", inline.strip())
+    if bulk:
+        label, pat, a, b = bulk.group(1) or "Watch", bulk.group(2), int(bulk.group(3)), int(bulk.group(4) or bulk.group(3))
+        if b < a or b - a > 200:
+            return await update.message.reply_text("Bad range.")
+        done = []
+        for k in range(a, b + 1):
+            url = pat.replace("{ep}", str(k))
+            if k <= len(s["episodes"]):
+                ep = s["episodes"][k - 1]; ep["links"][label] = url; done.append(k)
+            else:
+                while len(s["episodes"]) < k - 1:
+                    store.add_episode(s["id"], {}, save=False)
+                store.add_episode(s["id"], {label: url}, save=False); done.append(k)
+        store.save()
+        msg = f"🔗 Links set for EP {a}–{b} of {H(s['title'])}." + await _announce(ctx, cfg, store, s, b)
+        return await update.message.reply_text(msg, parse_mode=HTML)
+    title, links = parse_links(inline + "\n" + rest)
+    if not links:
+        return await update.message.reply_text(ADDEP_HELP, parse_mode=HTML)
+    # fill the first stub episode (no links yet) before appending a new one
+    stub = next((e for e in s["episodes"] if not e.get("links")), None)
+    if stub:
+        n = stub["n"]; store.set_episode_links(s["id"], n, links, title)
+    else:
+        n = store.add_episode(s["id"], links, title)
+    msg = f"🆕 EP {n} of {H(s['title'])}: {', '.join(map(H, links))} link(s) saved." + await _announce(ctx, cfg, store, s, n)
     await update.message.reply_text(msg, parse_mode=HTML)
+
+
+@admin_only
+async def setep(update, ctx):
+    """/setep <id> <ep> + links — replace an episode's watch links (and optional title)."""
+    store, cfg = deps(ctx)
+    raw = arg_text(update)
+    first, _, rest = raw.partition("\n")
+    parts = first.split(maxsplit=2)
+    s = store.find(parts[0]) if parts else None
+    if not s or len(parts) < 2 or not parts[1].isdigit() or not 1 <= int(parts[1]) <= len(s["episodes"]):
+        return await update.message.reply_text(ADDEP_HELP, parse_mode=HTML)
+    n = int(parts[1])
+    title, links = parse_links((parts[2] if len(parts) > 2 else "") + "\n" + rest)
+    if not links:
+        return await update.message.reply_text(ADDEP_HELP, parse_mode=HTML)
+    store.set_episode_links(s["id"], n, links, title)
+    msg = f"🔗 EP {n} of {H(s['title'])} updated." + await _announce(ctx, cfg, store, s, n)
+    await update.message.reply_text(msg, parse_mode=HTML)
+
+
+@admin_only
+async def eps(update, ctx):
+    """/eps <id> — list episodes with their link status."""
+    store, _ = deps(ctx)
+    s = store.find(arg_text(update))
+    if not s:
+        return await update.message.reply_text("Usage: /eps &lt;id&gt;", parse_mode=HTML)
+    rows = [f"EP {e['n']} {H(e.get('title',''))}: " + (", ".join(f'<a href="{H(u)}">{H(k)}</a>' for k, u in e["links"].items()) or "⏳ no link")
+            for e in s["episodes"]]
+    await update.message.reply_text(f"<b>{H(s['title'])}</b>\n" + ("\n".join(rows) or "No episodes."),
+                                    parse_mode=HTML, disable_web_page_preview=True)
 
 
 @admin_only
@@ -185,7 +258,7 @@ async def digest(update, ctx):
 @admin_only
 async def admin_help(update, ctx):
     await update.message.reply_text(
-        "🛠 <b>Admin</b>\n/add Title | Tropes | heat | synopsis\n/addep &lt;id&gt; + newline + episode text\n"
+        "🛠 <b>Admin</b>\n/add Title | Tropes | heat | synopsis\n/addep &lt;id&gt; &lt;watch link&gt; (or quality lines 480p/720p/1080p, or {ep} pattern + range)\n/setep &lt;id&gt; &lt;ep&gt; &lt;links&gt; — replace links\n/eps &lt;id&gt; — episode link status\n"
         "/complete &lt;id&gt;\n/edit &lt;id&gt; &lt;field&gt; &lt;value&gt;\n/delete &lt;id&gt;\n/list, /stats\n"
         "/repost &lt;id|all&gt; — post series cards\n/post [text] — teaser/custom post\n"
         "/poster &lt;id&gt; [url|gen|-] or send a photo\n/schedule YYYY-MM-DD HH:MM text, /schedules\n/digest — post today's drops now\n/cancel — abort current step", parse_mode=HTML)
@@ -250,7 +323,7 @@ async def on_photo(update, ctx):
 
 def handlers():
     return [CommandHandler(n, f) for n, f in [
-        ("add", add), ("addep", addep), ("complete", complete), ("edit", edit), ("delete", delete),
+        ("add", add), ("addep", addep), ("setep", setep), ("eps", eps), ("complete", complete), ("edit", edit), ("delete", delete),
         ("list", list_cmd), ("stats", stats), ("post", post), ("repost", repost), ("schedule", schedule),
         ("schedules", schedules), ("digest", digest), ("admin", admin_help), ("poster", poster)]] + \
         [MessageHandler(filters.PHOTO & filters.ChatType.PRIVATE, on_photo)]

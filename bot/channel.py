@@ -25,7 +25,7 @@ def series_card(s, brand="") -> str:
 
 def card_buttons(s, bot_username) -> M:
     n = len(s["episodes"])
-    return M([[B(f"🔥 Read episodes · {n} EP", url=f"https://t.me/{bot_username}?start=s_{s['id']}")],
+    return M([[B(f"▶️ Watch episodes · {n} EP", url=f"https://t.me/{bot_username}?start=s_{s['id']}")],
               [B("💌 Request story", url=f"https://t.me/{bot_username}?start=request"),
                B("🔎 Browse", url=f"https://t.me/{bot_username}?start=browse")]])
 
@@ -59,7 +59,9 @@ async def post_card(bot, cfg, store, s):
 
 async def announce_episode(bot, cfg, s, n):
     me = await bot.get_me()
-    teaser = H(s["episodes"][n - 1]["text"][:180]) + "…"
+    e = s["episodes"][n - 1]
+    q = " · ".join(k for k in e.get("links", {}) if k != "Watch")
     await post_to_channel(bot, cfg.channel_id,
-                          f"🆕 <b>{H(s['title'])}</b> — EP {n} just dropped {heat(s['heat'])}\n\n<i>{teaser}</i>",
-                          M([[B(f"🔥 Read EP {n}", url=f"https://t.me/{me.username}?start=e_{s['id']}_{n}")]]))
+                          f"🆕 <b>{H(s['title'])}</b> — EP {n} is out {heat(s['heat'])}\n🎬 {H(e.get('title') or '')}"
+                          + (f"\n🎞 Quality: <code>{H(q)}</code>" if q else "") + "\n\n🔞 18+ only · tap to watch 👇",
+                          M([[B(f"▶️ Watch EP {n}", url=f"https://t.me/{me.username}?start=e_{s['id']}_{n}")]]))

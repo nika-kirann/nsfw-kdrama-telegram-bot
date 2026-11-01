@@ -20,12 +20,28 @@ python -m bot
 ## Commands
 **Viewers:** /start (18+ gate, deep links `?start=s_<id>` / `e_<id>_<n>` / `request` / `browse`), /browse (Latest, Hottest, Ongoing, Completed, Tropes, Search, Spicy Scene, Dirty Talk, Character RP, Request), /latest, /search, /scene, /episode, /dirty, /rp, /stop, /request. Any DM text = search.
 
-**Admins:** /add Title | Tropes | heat | synopsis · /addep <id> + newline + text (updates card, announces drop) · /complete · /edit · /delete · /list · /stats · /repost <id|all> · /post [text] · /schedule YYYY-MM-DD HH:MM text · /schedules · /digest · /admin
+## Episodes = watch links
+Each episode is a title + one or more watch URLs (`{"n", "title", "links": {"Watch"|"480p"|"720p"|"1080p": url}}`). Viewers tap an EP button and get ▶️ URL buttons (one per quality). Episodes without links show ⏳ "link coming soon". The 8 seeded series ship with stub episodes — fill them in:
 
-Channel cards carry "🔥 Read episodes" / "💌 Request" / "🔎 Browse" buttons that open the bot privately. Daily digest at DAILY_DIGEST_TIME (TIMEZONE). Data lives in `data/series.json` (seeded with 3 series).
+```
+/addep 3 https://example.com/watch/ep1          # fills the first stub (or appends) with a ▶️ Watch button
+/addep 3
+Episode 2 – The Storm                             # optional title line
+480p https://example.com/ep2-480.mp4
+720p https://example.com/ep2-720.mp4
+1080p https://example.com/ep2-1080.mp4
+/addep 3 https://example.com/ep{ep}.mp4 1 8       # bulk: EP 1–8 from a pattern (prefix "720p " for a quality)
+/setep 3 2 720p https://new-link                  # replace EP 2's links
+/eps 3                                            # list link status
+```
+Each add/set updates the channel card and posts a "▶️ Watch EP n" drop. Old text-episode data is auto-migrated to stubs.
+
+**Admins:** /add Title | Tropes | heat | synopsis · /addep <id> <watch link> · /setep <id> <ep> <links> · /eps <id> (see *Episodes = watch links* below) · /complete · /edit · /delete · /list · /stats · /repost <id|all> · /post [text] · /schedule YYYY-MM-DD HH:MM text · /schedules · /digest · /admin
+
+Channel cards carry "▶️ Watch episodes" / "💌 Request" / "🔎 Browse" buttons that open the bot privately. Daily digest at DAILY_DIGEST_TIME (TIMEZONE). Data lives in `data/series.json` (seeded with 8 series whose episodes are link stubs).
 
 ## Extending
-- Seed series: `bot/content/series_seed.py`; quick hits: `scenes.py`, `episodes.py`, `dirty_talk.py`, `characters.py` (HTML formatting).
+- Seed series: `bot/content/series_seed.py`; quick hits: `scenes.py`, `episodes.py` (short teasers, not episodes), `dirty_talk.py`, `characters.py` (HTML formatting).
 - `on_text` in `bot/handlers/viewer.py` uses canned RP replies — swap in an LLM call for live roleplay.
 
 ## Cancel & posters

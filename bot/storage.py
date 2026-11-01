@@ -63,6 +63,7 @@ class TelegramStorage:
             log.error("DB channel: pinned backup is not valid JSON; ignoring")
             return False
         self.store.d = data
+        self.store._migrate()
         self.store.save(flush=False)
         log.info("DB channel: restored %s series from message %s", len(data["series"]), pm.message_id)
         return True
