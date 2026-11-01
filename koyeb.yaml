@@ -1,0 +1,26 @@
+# Reference spec for Koyeb (apply via control panel; Koyeb doesn't auto-read this file).
+app: suikora-bot
+service:
+  name: bot
+  type: web                 # Free tier = web services only
+  instance_type: free       # sleeps after 1h without HTTP -> ping /healthz (UptimeRobot)
+  regions: [fra]
+  scaling: {min: 1, max: 1} # exactly one poller per token
+  ports: [{port: 8000, protocol: http}]
+  routes: [{path: /, port: 8000}]
+  health_checks: [{type: http, port: 8000, path: /healthz}]
+  git:
+    repository: github.com/nika-kirann/nsfw-kdrama-telegram-bot
+    branch: main
+    builder: dockerfile
+    dockerfile: Dockerfile
+    deploy_on_push: true
+  env:                      # "@NAME" = Koyeb secret
+    TELEGRAM_BOT_TOKEN: "@TELEGRAM_BOT_TOKEN"
+    CHANNEL_ID: "@CHANNEL_ID"
+    DB_CHANNEL_ID: "@DB_CHANNEL_ID"
+    ADMIN_IDS: "@ADMIN_IDS"
+    STORAGE_BACKEND: telegram
+    PORT: "8000"
+    TIMEZONE: Asia/Kolkata
+    DAILY_DIGEST_TIME: "21:00"
